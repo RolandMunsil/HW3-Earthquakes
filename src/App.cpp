@@ -178,10 +178,13 @@ void App::onSimulation(double rdt) {
 	*/
 
 	//This version just tries to make sure the north pole is up - it doesn't care about latitude.
-	if (!mouseDown) {
-		
+	if (!mouseDown) {	
+		if (rotatedYAxis.x == 0 && rotatedYAxis.y == 0) {
+			//North pole is directly perpendicular to screen - don't try to do rotation
+			return;
+		}
+
 		float screenAngle = atan2(rotatedYAxis.y, rotatedYAxis.x) - radians(90.0);
-		//float amntToRotate = std::min(abs(screenAngle), 0.1f);
 		rotation = glm::rotate(mat4(1.0), -screenAngle / 12, vec3(0, 0, 1)) * rotation;
 	}
 }
