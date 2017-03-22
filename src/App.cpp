@@ -137,8 +137,9 @@ void App::onEvent(shared_ptr<Event> event) {
 
 			//Sometimes the event is triggered but the diff is <0, 0>
 			if (!(dxy.y == 0 && dxy.x == 0)) {
+				float movementLength = glm::length(dxy) / 20000.0f;
 				dxy = normalize(dxy);
-				mat4 axisRotate = toMat4(angleAxis(radians(1.7f), vec3(dxy.y, dxy.x, 0)));
+				mat4 axisRotate = toMat4(angleAxis(movementLength, vec3(dxy.y, dxy.x, 0)));
 				rotation = axisRotate * rotation;
 			}
         }
@@ -161,21 +162,24 @@ void App::onSimulation(double rdt) {
 
 	//This version tries to make the y-axis perfectly straight up and down, including in the z-direction.
 	//i.e. it tries to make it so you arer always staring at the equator
-	//float angleFromYAxis = acos(glm::dot(rotatedYAxis, vec3(0, 1, 0)));
-	//if (!mouseDown && angleFromYAxis > 0) {
-	//	float angleToRotate;
-	//	if (angleFromYAxis < radians(10.0f)) {
-	//		angleToRotate = 0;// std::min(angleFromYAxis, radians(0.7f));
-	//	}
-	//	else {
-	//		angleToRotate = (angleFromYAxis * abs(angleFromYAxis)) / 15.0f;
-	//	}
-	//	vec3 rotationAxis = glm::cross(rotatedYAxis, vec3(0, 1, 0));
-	//	rotation = glm::rotate(mat4(1.0), angleToRotate, rotationAxis) * rotation;
-	//}
+	/*
+	float angleFromYAxis = acos(glm::dot(rotatedYAxis, vec3(0, 1, 0)));
+	if (!mouseDown && angleFromYAxis > 0) {
+		float angleToRotate;
+		if (angleFromYAxis < radians(10.0f)) {
+			angleToRotate = 0;// std::min(angleFromYAxis, radians(0.7f));
+		}
+		else {
+			angleToRotate = (angleFromYAxis * abs(angleFromYAxis)) / 15.0f;
+		}
+		vec3 rotationAxis = glm::cross(rotatedYAxis, vec3(0, 1, 0));
+		rotation = glm::rotate(mat4(1.0), angleToRotate, rotationAxis) * rotation;
+	}
+	*/
 
+	//This version just tries to make sure the north pole is up - it doesn't care about latitude.
 	if (!mouseDown) {
-		//This version just tries to make sure the north pole is up - it doesn't care about latitude.
+		
 		float screenAngle = atan2(rotatedYAxis.y, rotatedYAxis.x) - radians(90.0);
 		//float amntToRotate = std::min(abs(screenAngle), 0.1f);
 		rotation = glm::rotate(mat4(1.0), -screenAngle / 12, vec3(0, 0, 1)) * rotation;
@@ -244,25 +248,16 @@ void App::onRenderGraphics() {
 void App::drawString(const std::string text, float latitude, float longitude, mat4 view, mat4 projection) {
 
 	_textShader.use();
-	// Set a rotation matrix to apply when drawing the earth and earthquakes
 
 	vec3 pos = earth->getPosition(latitude, longitude);
-	//mat4 rot = glm::rotate(mat4(1.0), longitude, vec3(0, 1, 0)) * glm::rotate(mat4(1.0), latitude, vec3(-1, 0, 0));
-	//rot = rot * glm::rotate(mat4(1.0), radians(-90.0f), vec3(0, 1, 0));
-
-	//rot = glm::lookAt(vec3(0), pos, vec3(0, 1, 0)) * glm::rotate(mat4(1.0), radians(90.0f), vec3(0, 0, 1));
 
 	pos = rotation * vec4(pos, 1);
 	pos.y -= 0.05;
 	pos.z += 0.1;
 
 	glm::mat4 model =
-		//Rotate text based on Earth's rotation.
-		//rotation *
 		// Translate so it's on the surface of the eath
 		glm::translate(mat4(1.0), pos) *
-		//Rotate text so it's pointing in the right direction
-		//rot *
 		//Scale even more
 		glm::scale(mat4(1.0), vec3(0.05f)) * 
 		//Scale based on font text size
@@ -296,22 +291,6 @@ void App::drawText() {
     const std::string text = s.str();
     
     _textShader.use();
-	//glm::mat4 view = glm::lookAt(eye_world, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
-
-	//// Setup the projection matrix so that things are rendered in perspective
-	//glm::mat4 projection = glm::perspective(glm::radians(45.0f), (GLfloat)_windowWidth / (GLfloat)_windowHeight, 0.1f, 500.0f);
-
-	//// Set a rotation matrix to apply when drawing the earth and earthquakes
-	//glm::mat4 model =
-	//	rotation *
-	//	glm::translate(mat4(1.0), vec3(0, 0, 1)) * 
-	//	glm::scale(mat4(1.0), vec3(0.1f)) * 
-	//	glm::scale(mat4(1.0), vec3(1/40.0f)) *
-	//	glm::scale(mat4(1.0), vec3(1, -1, 1));
-
-	//_textShader.setUniform("projection_mat", projection);
-	//_textShader.setUniform("view_mat", view);
-	//_textShader.setUniform("model_mat", model);
 
     _textShader.setUniform("projection_mat", glm::ortho(0.f, (GLfloat)_windowWidth, (GLfloat)_windowHeight, 0.f, -1.f, 1.f));
     _textShader.setUniform("view_mat", glm::mat4(1.0));
