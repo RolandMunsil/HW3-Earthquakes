@@ -131,15 +131,16 @@ void App::onEvent(shared_ptr<Event> event) {
         mouseDown = false;
     }
     else if (name == "mouse_pointer"){
-        // TODO: Update the "rotation" matrix based on how the user has dragged the mouse
-        // Note: the mouse movement since the last frame is stored in dxy.
         if (mouseDown){
 			vec2 mousePos = vec2(event->get2DData());
             vec2 dxy = mousePos - lastMousePos;
 
-			dxy = normalize(dxy);
-			mat4 axisRotate = toMat4(angleAxis(radians(2.0f), vec3(dxy.y, dxy.x, 0)));
-			rotation = axisRotate * rotation;
+			//Sometimes the event is triggered but the diff is <0, 0>
+			if (!(dxy.y == 0 && dxy.x == 0)) {
+				dxy = normalize(dxy);
+				mat4 axisRotate = toMat4(angleAxis(radians(1.7f), vec3(dxy.y, dxy.x, 0)));
+				rotation = axisRotate * rotation;
+			}
         }
 	}
 }
@@ -153,6 +154,31 @@ void App::onSimulation(double rdt) {
 	}
 	if (currentTime < eqd.getByIndex(eqd.getMinIndex()).getDate().asSeconds()) {
 		currentTime = eqd.getByIndex(eqd.getMaxIndex()).getDate().asSeconds();
+	}
+
+	//Keep user from getting globe crazily rotated
+	vec3 rotatedYAxis = glm::column(rotation, 1);
+
+	//This version tries to make the y-axis perfectly straight up and down, including in the z-direction.
+	//i.e. it tries to make it so you arer always staring at the equator
+	//float angleFromYAxis = acos(glm::dot(rotatedYAxis, vec3(0, 1, 0)));
+	//if (!mouseDown && angleFromYAxis > 0) {
+	//	float angleToRotate;
+	//	if (angleFromYAxis < radians(10.0f)) {
+	//		angleToRotate = 0;// std::min(angleFromYAxis, radians(0.7f));
+	//	}
+	//	else {
+	//		angleToRotate = (angleFromYAxis * abs(angleFromYAxis)) / 15.0f;
+	//	}
+	//	vec3 rotationAxis = glm::cross(rotatedYAxis, vec3(0, 1, 0));
+	//	rotation = glm::rotate(mat4(1.0), angleToRotate, rotationAxis) * rotation;
+	//}
+
+	if (!mouseDown) {
+		//This version just tries to make sure the north pole is up - it doesn't care about latitude.
+		float screenAngle = atan2(rotatedYAxis.y, rotatedYAxis.x) - radians(90.0);
+		//float amntToRotate = std::min(abs(screenAngle), 0.1f);
+		rotation = glm::rotate(mat4(1.0), -screenAngle / 12, vec3(0, 0, 1)) * rotation;
 	}
 }
 
@@ -180,6 +206,8 @@ void App::onRenderGraphics() {
 	earth->draw(_shader);
 
 	// Draw earthquakes
+	fonsSetAlign(fs, FONS_ALIGN_CENTER | FONS_ALIGN_MIDDLE);
+
 	int start = eqd.getIndexByDate(Date(currentTime - PLAYBACK_WINDOW));
 	int end = eqd.getIndexByDate(Date(currentTime));
 	for (int x=start; x<end; x++) {
@@ -201,11 +229,61 @@ void App::onRenderGraphics() {
 		else {
 			earthquakeVisualRed->draw(_shader, eMatrix);
 		}
+
+		stringstream stream;
+		stream << fixed << setprecision(1) << e.getMagnitude();
+		string s = stream.str();
+
+		drawString(s, radians(e.getLatitude()), radians(e.getLongitude()), view, projection);
 	}
-    
+	fonsSetAlign(fs, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
     drawText();
 }
 
+
+void App::drawString(const std::string text, float latitude, float longitude, mat4 view, mat4 projection) {
+
+	_textShader.use();
+	// Set a rotation matrix to apply when drawing the earth and earthquakes
+
+	vec3 pos = earth->getPosition(latitude, longitude);
+	//mat4 rot = glm::rotate(mat4(1.0), longitude, vec3(0, 1, 0)) * glm::rotate(mat4(1.0), latitude, vec3(-1, 0, 0));
+	//rot = rot * glm::rotate(mat4(1.0), radians(-90.0f), vec3(0, 1, 0));
+
+	//rot = glm::lookAt(vec3(0), pos, vec3(0, 1, 0)) * glm::rotate(mat4(1.0), radians(90.0f), vec3(0, 0, 1));
+
+	pos = rotation * vec4(pos, 1);
+	pos.y -= 0.05;
+	pos.z += 0.1;
+
+	glm::mat4 model =
+		//Rotate text based on Earth's rotation.
+		//rotation *
+		// Translate so it's on the surface of the eath
+		glm::translate(mat4(1.0), pos) *
+		//Rotate text so it's pointing in the right direction
+		//rot *
+		//Scale even more
+		glm::scale(mat4(1.0), vec3(0.05f)) * 
+		//Scale based on font text size
+		glm::scale(mat4(1.0), vec3(1/40.0f)) *
+		//Flip text
+		glm::scale(mat4(1.0), vec3(1, -1, 1));
+
+	_textShader.setUniform("projection_mat", projection);
+	_textShader.setUniform("view_mat", view);
+	_textShader.setUniform("model_mat", model);
+
+	_textShader.setUniform("lambertian_texture", 0);
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	fonsDrawText(fs, 0, 0, text.c_str(), NULL);
+
+	glDisable(GL_BLEND);
+	_shader.use();
+}
 
 void App::drawText() {
 	Date d(currentTime);
@@ -249,7 +327,6 @@ void App::drawText() {
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
     _shader.use();
-
 }
                 
 }//namespace

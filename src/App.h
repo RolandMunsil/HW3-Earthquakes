@@ -27,6 +27,7 @@ protected:
     
     void initializeText(); // Initialized the font rendering library
     void drawText(); // Draws the current time on the screen.
+	void drawString(const std::string text, float latitude, float longitude, mat4 view, mat4 projection);
     struct FONScontext* fs;
     GLSLProgram _textShader;
     
